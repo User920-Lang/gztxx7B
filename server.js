@@ -16,13 +16,12 @@ await db.read();
 
 // ── Hash validation helper ────────────────────────────────────
 function getHash() {
-  // Prioridade: variável de ambiente > db.json > null
   return process.env.SERVER_HASH || db.data.config?.hash || null;
 }
 
 function validateHash(hash) {
   const serverHash = getHash();
-  if (!serverHash) return true; // sem hash configurado = livre
+  if (!serverHash) return true;
   return hash === serverHash;
 }
 
@@ -52,24 +51,28 @@ function getContinent(countryCode) {
 
 // ── GET /config.json ──────────────────────────────────────────
 app.get("/config.json", (req, res) => {
-  // Retorna config sem expor o hash
   const { hash, ...safeConfig } = db.data.config;
   res.json(safeConfig);
 });
 
 // ── GET /hash ─────────────────────────────────────────────────
-// Mostra o hash atual (use só internamente / painel admin)
 app.get("/hash", (req, res) => {
   const currentHash = getHash();
   if (!currentHash) {
-    return res.json({ hash: null, message: "Nenhum hash configurado. Acesso livre." });
+    return res.json({ hash: null, message: "Nenhum hash configurado." });
   }
   res.json({ hash: currentHash });
 });
 
-// ── GET /auth ─────────────────────────────────────────────────
+// ── GET /auth (AGORA COM HASH 🔒) ─────────────────────────────
 app.get("/auth", (req, res) => {
   const username = (req.query.user || "").trim().toLowerCase();
+  const hash = (req.query.hash || "").trim();
+
+  // 🔒 valida hash aqui
+  if (!validateHash(hash)) {
+    return res.status(401).send("invalid_hash");
+  }
 
   if (db.data.config.maintenance) {
     return res.send("off");
@@ -87,8 +90,6 @@ app.get("/auth", (req, res) => {
 });
 
 // ── POST /user/login/ ─────────────────────────────────────────
-// Body: { deviceId, country, hash }
-// O campo "hash" deve bater com o hash do db.json ou SERVER_HASH
 app.post("/user/login/", async (req, res) => {
   const { deviceId, country, hash } = req.body;
 
@@ -96,7 +97,6 @@ app.post("/user/login/", async (req, res) => {
     return res.status(400).json({ error: "deviceId required" });
   }
 
-  // Validação do Hash Code
   if (!validateHash(hash)) {
     return res.status(401).json({ error: "invalid hash" });
   }
@@ -146,12 +146,11 @@ app.post("/user/login/", async (req, res) => {
   });
 });
 
-// ── POST /admin/ban ───────────────────────────────────────────
 app.post("/admin/ban", async (req, res) => {
   const { username, action } = req.body;
 
   if (!username || !["ban", "unban"].includes(action)) {
-    return res.status(400).json({ error: "username and action (ban|unban) required" });
+    return res.status(400).json({ error: "username + action required" });
   }
 
   await db.read();
@@ -159,36 +158,32 @@ app.post("/admin/ban", async (req, res) => {
   const name = username.trim().toLowerCase();
 
   if (action === "ban") {
-    const already = db.data.bans.some((b) => b.trim().toLowerCase() === name);
-    if (!already) {
-      db.data.bans.push(username.trim());
+    if (!db.data.bans.includes(name)) {
+      db.data.bans.push(name);
       await db.write();
     }
-    return res.json({ success: true, action: "banned", username });
+    return res.json({ success: true });
   }
 
-  db.data.bans = db.data.bans.filter((b) => b.trim().toLowerCase() !== name);
+  db.data.bans = db.data.bans.filter((b) => b !== name);
   await db.write();
-  return res.json({ success: true, action: "unbanned", username });
+  res.json({ success: true });
 });
 
-// ── POST /admin/set-hash ──────────────────────────────────────
-// Muda o hash direto pelo db.json em tempo real
 app.post("/admin/set-hash", async (req, res) => {
   const { newHash } = req.body;
 
-  if (!newHash || typeof newHash !== "string" || newHash.trim() === "") {
-    return res.status(400).json({ error: "newHash is required" });
+  if (!newHash) {
+    return res.status(400).json({ error: "newHash required" });
   }
 
   await db.read();
   db.data.config.hash = newHash.trim();
   await db.write();
 
-  res.json({ success: true, hash: db.data.config.hash });
+  res.json({ success: true });
 });
 
-// ── GET /admin/users ──────────────────────────────────────────
 app.get("/admin/users", async (req, res) => {
   await db.read();
   res.json(db.data.users);
@@ -196,6 +191,6 @@ app.get("/admin/users", async (req, res) => {
 
 app.listen(PORT, () => {
   const currentHash = getHash();
-  console.log(`\n🚀 Gztxx7Backend rodando em http://localhost:${PORT}`);
-  console.log(`🔑 Hash Code: ${currentHash ?? "DESATIVADO (acesso livre)"}\n`);
+  console.log(`🚀 Backend rodando em http://localhost:${PORT}`);
+  console.log(`🔑 Hash: ${currentHash ?? "OFF"}`);
 });

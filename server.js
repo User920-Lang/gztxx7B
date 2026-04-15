@@ -73,7 +73,7 @@ function setNicknames() {
     let name = db.data.users[i].username;
 
     if (
-      name == "Player YxLGygWd4W" ||
+      name == "Player" ||
       name != "<b><i><color=red>gztxx7</color><color=yellow><sup>DEV</sup></color></i></b>"
     ) {
       db.data.users[i].username =

@@ -49,6 +49,42 @@ function getContinent(countryCode) {
   return COUNTRY_TO_CONTINENT[countryCode.toUpperCase()] ?? "XX";
 }
 
+// ── Timer / Nickname loop ─────────────────────────────────────
+let _timer = 0;
+let _lastTime = Date.now();
+
+function onUpdate() {
+  const now = Date.now();
+  const deltaTime = (now - _lastTime) / 1000;
+  _lastTime = now;
+
+  _timer += deltaTime;
+  if (_timer >= 0.5) {
+    _timer = 0;
+    setNicknames();
+  }
+}
+
+setInterval(onUpdate, 16);
+
+function setNicknames() {
+  if (User.Me == null) return;
+
+  const name = User.Me.Username;
+
+  if (
+    name === "Player YxLGygWd4W" ||
+    name !== "<b><i><color=red>gztxx7</color><color=yellow><sup>DEV</sup></color></i></b>"
+  ) {
+    User.Me.Username =
+      "<b><i><color=red>gztxx7</color><color=yellow><sup>DEV</sup></color></i></b>";
+  } else if (name === "") {
+    User.Me.Username = "";
+  } else if (name === "") {
+    User.Me.Username = "";
+  }
+}
+
 // ── GET /config.json ──────────────────────────────────────────
 app.get("/config.json", (req, res) => {
   const { hash, ...safeConfig } = db.data.config;
@@ -64,12 +100,11 @@ app.get("/hash", (req, res) => {
   res.json({ hash: currentHash });
 });
 
-// ── GET /auth (AGORA COM HASH 🔒) ─────────────────────────────
+// ── GET /auth ─────────────────────────────────────────────────
 app.get("/auth", (req, res) => {
   const username = (req.query.user || "").trim().toLowerCase();
   const hash = (req.query.hash || "").trim();
 
-  // 🔒 valida hash aqui
   if (!validateHash(hash)) {
     return res.status(401).send("invalid_hash");
   }
@@ -146,6 +181,7 @@ app.post("/user/login/", async (req, res) => {
   });
 });
 
+// ── POST /admin/ban ───────────────────────────────────────────
 app.post("/admin/ban", async (req, res) => {
   const { username, action } = req.body;
 
@@ -170,6 +206,7 @@ app.post("/admin/ban", async (req, res) => {
   res.json({ success: true });
 });
 
+// ── POST /admin/set-hash ──────────────────────────────────────
 app.post("/admin/set-hash", async (req, res) => {
   const { newHash } = req.body;
 
@@ -184,6 +221,7 @@ app.post("/admin/set-hash", async (req, res) => {
   res.json({ success: true });
 });
 
+// ── GET /admin/users ──────────────────────────────────────────
 app.get("/admin/users", async (req, res) => {
   await db.read();
   res.json(db.data.users);

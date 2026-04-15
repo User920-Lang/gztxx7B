@@ -110,7 +110,7 @@ app.post("/user/login/", async (req, res) => {
       id: nanoid(),
       deviceId,
       continent: getContinent(country),
-      username: "PastPlayer<color=yellow><sup>#" + nanoid(6),
+      username: "PastPlayer<color=yellow><sup>" + nanoid(5),
       crowns: 0,
       gems: 5000,
       trophys: 0,
@@ -140,8 +140,8 @@ app.post("/user/login/", async (req, res) => {
     trophys: user.trophys,
     crowns: user.crowns,
     experience: user.experience,
-    gems: user.gems,
-    coins: user.coins,
+    gems: 5000,
+    coins: 500,
     banned: false,
   });
 });

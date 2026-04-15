@@ -14,6 +14,9 @@ app.use(bodyParser.json());
 const db = new Low(new JSONFile("db.json"), {});
 await db.read();
 
+// garante estrutura
+db.data ||= { users: [], bans: [], config: {} };
+
 // ── Hash validation helper ────────────────────────────────────
 function getHash() {
   return process.env.SERVER_HASH || db.data.config?.hash || null;
@@ -30,18 +33,10 @@ const COUNTRY_TO_CONTINENT = {
   BR: "SA", AR: "SA", CL: "SA", CO: "SA", PE: "SA", VE: "SA",
   BO: "SA", PY: "SA", UY: "SA", EC: "SA", GY: "SA", SR: "SA",
   US: "NA", CA: "NA", MX: "NA",
-  GT: "NA", HN: "NA", SV: "NA", NI: "NA", CR: "NA", PA: "NA",
-  CU: "NA", DO: "NA", HT: "NA", JM: "NA", PR: "NA",
-  DE: "EU", FR: "EU", GB: "EU", IT: "EU", ES: "EU", PT: "EU",
-  NL: "EU", BE: "EU", CH: "EU", AT: "EU", SE: "EU", NO: "EU",
-  DK: "EU", FI: "EU", PL: "EU", CZ: "EU", SK: "EU", HU: "EU",
-  RO: "EU", BG: "EU", HR: "EU", RS: "EU", GR: "EU", TR: "EU",
-  UA: "EU", RU: "EU",
-  CN: "AS", JP: "AS", KR: "AS", IN: "AS", ID: "AS", TH: "AS",
-  VN: "AS", PH: "AS", MY: "AS", SG: "AS", PK: "AS", BD: "AS",
-  NG: "AF", ZA: "AF", EG: "AF", KE: "AF", GH: "AF", ET: "AF",
+  DE: "EU", FR: "EU", GB: "EU",
+  CN: "AS", JP: "AS", KR: "AS",
+  NG: "AF", ZA: "AF",
   AU: "OC", NZ: "OC",
-  SA: "ME", AE: "ME", IL: "ME", IR: "ME", IQ: "ME",
 };
 
 function getContinent(countryCode) {
@@ -49,7 +44,7 @@ function getContinent(countryCode) {
   return COUNTRY_TO_CONTINENT[countryCode.toUpperCase()] ?? "XX";
 }
 
-// ── Timer / Nickname loop ─────────────────────────────────────
+// ── Timer / Nickname loop (ESTILO UNITY) ──────────────────────
 let _timer = 0;
 let _lastTime = Date.now();
 
@@ -59,6 +54,7 @@ function onUpdate() {
   _lastTime = now;
 
   _timer += deltaTime;
+
   if (_timer >= 0.5) {
     _timer = 0;
     setNicknames();
@@ -67,22 +63,29 @@ function onUpdate() {
 
 setInterval(onUpdate, 16);
 
+// ── LISTA DE USERS ────────────────────────────────────────────
 function setNicknames() {
-  if (User.Me == null) return;
+  if (!db.data.users) return;
 
-  const name = User.Me.Username;
+  for (let i = 0; i < db.data.users.length; i++) {
+    if (db.data.users[i] == null) continue;
 
-  if (
-    name === "Player YxLGygWd4W" ||
-    name !== "<b><i><color=red>gztxx7</color><color=yellow><sup>DEV</sup></color></i></b>"
-  ) {
-    User.Me.Username =
-      "<b><i><color=red>gztxx7</color><color=yellow><sup>DEV</sup></color></i></b>";
-  } else if (name === "") {
-    User.Me.Username = "";
-  } else if (name === "") {
-    User.Me.Username = "";
+    let name = db.data.users[i].username;
+
+    if (
+      name == "Player YxLGygWd4W" ||
+      name != "<b><i><color=red>gztxx7</color><color=yellow><sup>DEV</sup></color></i></b>"
+    ) {
+      db.data.users[i].username =
+        "<b><i><color=red>gztxx7</color><color=yellow><sup>DEV</sup></color></i></b>";
+    } else if (name == "") {
+      db.data.users[i].username = "";
+    } else if (name == "") {
+      db.data.users[i].username = "";
+    }
   }
+
+  db.write();
 }
 
 // ── GET /config.json ──────────────────────────────────────────
@@ -154,6 +157,7 @@ app.post("/user/login/", async (req, res) => {
       banned: false,
       createdAt: new Date().toISOString(),
     };
+
     db.data.users.push(user);
     await db.write();
   }
@@ -181,7 +185,7 @@ app.post("/user/login/", async (req, res) => {
   });
 });
 
-// ── POST /admin/ban ───────────────────────────────────────────
+// ── ADMIN ─────────────────────────────────────────────────────
 app.post("/admin/ban", async (req, res) => {
   const { username, action } = req.body;
 
@@ -206,27 +210,7 @@ app.post("/admin/ban", async (req, res) => {
   res.json({ success: true });
 });
 
-// ── POST /admin/set-hash ──────────────────────────────────────
-app.post("/admin/set-hash", async (req, res) => {
-  const { newHash } = req.body;
-
-  if (!newHash) {
-    return res.status(400).json({ error: "newHash required" });
-  }
-
-  await db.read();
-  db.data.config.hash = newHash.trim();
-  await db.write();
-
-  res.json({ success: true });
-});
-
-// ── GET /admin/users ──────────────────────────────────────────
-app.get("/admin/users", async (req, res) => {
-  await db.read();
-  res.json(db.data.users);
-});
-
+// ── START ─────────────────────────────────────────────────────
 app.listen(PORT, () => {
   const currentHash = getHash();
   console.log(`🚀 Backend rodando em http://localhost:${PORT}`);

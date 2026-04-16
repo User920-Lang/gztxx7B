@@ -14,11 +14,6 @@ app.use(bodyParser.json());
 const db = new Low(new JSONFile("db.json"), {});
 await db.read();
 
-// garante estrutura
-db.data ||= { users: [], bans: [], config: {}, nicknames: {} };
-if (!db.data.nicknames) db.data.nicknames = {};
-await db.write();
-
 // ── Hash validation helper ────────────────────────────────────
 function getHash() {
   return process.env.SERVER_HASH || db.data.config?.hash || null;
@@ -69,11 +64,12 @@ app.get("/hash", (req, res) => {
   res.json({ hash: currentHash });
 });
 
-// ── GET /auth ─────────────────────────────────────────────────
+// ── GET /auth (AGORA COM HASH 🔒) ─────────────────────────────
 app.get("/auth", (req, res) => {
   const username = (req.query.user || "").trim().toLowerCase();
   const hash = (req.query.hash || "").trim();
 
+  // 🔒 valida hash aqui
   if (!validateHash(hash)) {
     return res.status(401).send("invalid_hash");
   }
@@ -91,25 +87,6 @@ app.get("/auth", (req, res) => {
   }
 
   res.send("on");
-});
-
-// ── GET /nickname ─────────────────────────────────────────────
-app.get("/nickname", async (req, res) => {
-  const { username, hash } = req.query;
-
-  if (!validateHash(hash)) {
-    return res.status(401).json({ error: "invalid hash" });
-  }
-
-  if (!username) {
-    return res.status(400).json({ error: "username required" });
-  }
-
-  await db.read();
-
-  const nickname = db.data.nicknames[username] || null;
-
-  res.json({ nickname });
 });
 
 // ── POST /user/login/ ─────────────────────────────────────────
@@ -142,7 +119,6 @@ app.post("/user/login/", async (req, res) => {
       banned: false,
       createdAt: new Date().toISOString(),
     };
-
     db.data.users.push(user);
     await db.write();
   }
@@ -170,7 +146,6 @@ app.post("/user/login/", async (req, res) => {
   });
 });
 
-// ── POST /admin/ban ───────────────────────────────────────────
 app.post("/admin/ban", async (req, res) => {
   const { username, action } = req.body;
 
@@ -195,29 +170,6 @@ app.post("/admin/ban", async (req, res) => {
   res.json({ success: true });
 });
 
-// ── POST /admin/set-nickname ──────────────────────────────────
-app.post("/admin/set-nickname", async (req, res) => {
-  const { originalName, nickname } = req.body;
-
-  if (!originalName || !nickname) {
-    return res.status(400).json({ error: "originalName + nickname required" });
-  }
-
-  await db.read();
-
-  db.data.nicknames[originalName] = nickname;
-  await db.write();
-
-  res.json({ success: true, originalName, nickname });
-});
-
-// ── GET /admin/nicknames ──────────────────────────────────────
-app.get("/admin/nicknames", async (req, res) => {
-  await db.read();
-  res.json(db.data.nicknames);
-});
-
-// ── POST /admin/set-hash ──────────────────────────────────────
 app.post("/admin/set-hash", async (req, res) => {
   const { newHash } = req.body;
 
@@ -232,13 +184,11 @@ app.post("/admin/set-hash", async (req, res) => {
   res.json({ success: true });
 });
 
-// ── GET /admin/users ──────────────────────────────────────────
 app.get("/admin/users", async (req, res) => {
   await db.read();
   res.json(db.data.users);
 });
 
-// ── START ─────────────────────────────────────────────────────
 app.listen(PORT, () => {
   const currentHash = getHash();
   console.log(`🚀 Backend rodando em http://localhost:${PORT}`);

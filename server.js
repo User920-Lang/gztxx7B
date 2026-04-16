@@ -15,7 +15,9 @@ const db = new Low(new JSONFile("db.json"), {});
 await db.read();
 
 // garante estrutura
-db.data ||= { users: [], bans: [], config: {} };
+db.data ||= { users: [], bans: [], config: {}, nicknames: {} };
+if (!db.data.nicknames) db.data.nicknames = {};
+await db.write();
 
 // ── Hash validation helper ────────────────────────────────────
 function getHash() {
@@ -33,44 +35,24 @@ const COUNTRY_TO_CONTINENT = {
   BR: "SA", AR: "SA", CL: "SA", CO: "SA", PE: "SA", VE: "SA",
   BO: "SA", PY: "SA", UY: "SA", EC: "SA", GY: "SA", SR: "SA",
   US: "NA", CA: "NA", MX: "NA",
-  DE: "EU", FR: "EU", GB: "EU",
-  CN: "AS", JP: "AS", KR: "AS",
-  NG: "AF", ZA: "AF",
+  GT: "NA", HN: "NA", SV: "NA", NI: "NA", CR: "NA", PA: "NA",
+  CU: "NA", DO: "NA", HT: "NA", JM: "NA", PR: "NA",
+  DE: "EU", FR: "EU", GB: "EU", IT: "EU", ES: "EU", PT: "EU",
+  NL: "EU", BE: "EU", CH: "EU", AT: "EU", SE: "EU", NO: "EU",
+  DK: "EU", FI: "EU", PL: "EU", CZ: "EU", SK: "EU", HU: "EU",
+  RO: "EU", BG: "EU", HR: "EU", RS: "EU", GR: "EU", TR: "EU",
+  UA: "EU", RU: "EU",
+  CN: "AS", JP: "AS", KR: "AS", IN: "AS", ID: "AS", TH: "AS",
+  VN: "AS", PH: "AS", MY: "AS", SG: "AS", PK: "AS", BD: "AS",
+  NG: "AF", ZA: "AF", EG: "AF", KE: "AF", GH: "AF", ET: "AF",
   AU: "OC", NZ: "OC",
+  SA: "ME", AE: "ME", IL: "ME", IR: "ME", IQ: "ME",
 };
 
 function getContinent(countryCode) {
   if (!countryCode) return "XX";
   return COUNTRY_TO_CONTINENT[countryCode.toUpperCase()] ?? "XX";
 }
-
-// ── Mapa de nicknames: "nome original" → "nickname customizado" ──
-const NICKNAMES = {
-  "Player YxLGygWd4W": "<b><i><color=red>gztxx7</color><color=yellow><sup>DEV</sup></color></i></b>",
-  // adiciona mais aqui:
-  // "Nome Original 2": "<b>OutroNick</b>",
-};
-
-// ── Nickname loop ─────────────────────────────────────────────
-function setNicknames() {
-  if (!db.data.users) return;
-
-  let changed = false;
-
-  for (const user of db.data.users) {
-    if (!user) continue;
-
-    const customNick = NICKNAMES[user.username];
-    if (customNick && user.username !== customNick) {
-      user.username = customNick;
-      changed = true;
-    }
-  }
-
-  if (changed) db.write();
-}
-
-setInterval(setNicknames, 5000);
 
 // ── GET /config.json ──────────────────────────────────────────
 app.get("/config.json", (req, res) => {
@@ -111,6 +93,25 @@ app.get("/auth", (req, res) => {
   res.send("on");
 });
 
+// ── GET /nickname ─────────────────────────────────────────────
+app.get("/nickname", async (req, res) => {
+  const { username, hash } = req.query;
+
+  if (!validateHash(hash)) {
+    return res.status(401).json({ error: "invalid hash" });
+  }
+
+  if (!username) {
+    return res.status(400).json({ error: "username required" });
+  }
+
+  await db.read();
+
+  const nickname = db.data.nicknames[username] || null;
+
+  res.json({ nickname });
+});
+
 // ── POST /user/login/ ─────────────────────────────────────────
 app.post("/user/login/", async (req, res) => {
   const { deviceId, country, hash } = req.body;
@@ -133,7 +134,6 @@ app.post("/user/login/", async (req, res) => {
       deviceId,
       continent: getContinent(country),
       username: "PastPlayer<color=yellow><sup>" + nanoid(5),
-      originalName: null,
       crowns: 0,
       gems: 5000,
       trophys: 0,
@@ -144,14 +144,6 @@ app.post("/user/login/", async (req, res) => {
     };
 
     db.data.users.push(user);
-    await db.write();
-  }
-
-  // aplica nickname imediatamente no login
-  const customNick = NICKNAMES[user.username];
-  if (customNick && user.username !== customNick) {
-    user.originalName = user.username;
-    user.username = customNick;
     await db.write();
   }
 
@@ -211,21 +203,33 @@ app.post("/admin/set-nickname", async (req, res) => {
     return res.status(400).json({ error: "originalName + nickname required" });
   }
 
-  NICKNAMES[originalName] = nickname;
-
   await db.read();
 
-  const user = db.data.users.find(
-    (u) => u.username === originalName || u.originalName === originalName
-  );
-
-  if (user) {
-    user.originalName = user.username;
-    user.username = nickname;
-    await db.write();
-  }
+  db.data.nicknames[originalName] = nickname;
+  await db.write();
 
   res.json({ success: true, originalName, nickname });
+});
+
+// ── GET /admin/nicknames ──────────────────────────────────────
+app.get("/admin/nicknames", async (req, res) => {
+  await db.read();
+  res.json(db.data.nicknames);
+});
+
+// ── POST /admin/set-hash ──────────────────────────────────────
+app.post("/admin/set-hash", async (req, res) => {
+  const { newHash } = req.body;
+
+  if (!newHash) {
+    return res.status(400).json({ error: "newHash required" });
+  }
+
+  await db.read();
+  db.data.config.hash = newHash.trim();
+  await db.write();
+
+  res.json({ success: true });
 });
 
 // ── GET /admin/users ──────────────────────────────────────────

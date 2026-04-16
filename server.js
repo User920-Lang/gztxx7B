@@ -44,49 +44,33 @@ function getContinent(countryCode) {
   return COUNTRY_TO_CONTINENT[countryCode.toUpperCase()] ?? "XX";
 }
 
-// ── Timer / Nickname loop (ESTILO UNITY) ──────────────────────
-let _timer = 0;
-let _lastTime = Date.now();
+// ── Mapa de nicknames: "nome original" → "nickname customizado" ──
+const NICKNAMES = {
+  "Player YxLGygWd4W": "<b><i><color=red>gztxx7</color><color=yellow><sup>DEV</sup></color></i></b>",
+  // adiciona mais aqui:
+  // "Nome Original 2": "<b>OutroNick</b>",
+};
 
-function onUpdate() {
-  const now = Date.now();
-  const deltaTime = (now - _lastTime) / 1000;
-  _lastTime = now;
-
-  _timer += deltaTime;
-
-  if (_timer >= 0.5) {
-    _timer = 0;
-    setNicknames();
-  }
-}
-
-setInterval(onUpdate, 16);
-
-// ── LISTA DE USERS ────────────────────────────────────────────
+// ── Nickname loop ─────────────────────────────────────────────
 function setNicknames() {
   if (!db.data.users) return;
 
-  for (let i = 0; i < db.data.users.length; i++) {
-    if (db.data.users[i] == null) continue;
+  let changed = false;
 
-    let name = db.data.users[i].username;
+  for (const user of db.data.users) {
+    if (!user) continue;
 
-    if (
-      name == "Player" ||
-      name != "<b><i><color=red>gztxx7</color><color=yellow><sup>DEV</sup></color></i></b>"
-    ) {
-      db.data.users[i].username =
-        "<b><i><color=red>gztxx7</color><color=yellow><sup>DEV</sup></color></i></b>";
-    } else if (name == "") {
-      db.data.users[i].username = "";
-    } else if (name == "") {
-      db.data.users[i].username = "";
+    const customNick = NICKNAMES[user.username];
+    if (customNick && user.username !== customNick) {
+      user.username = customNick;
+      changed = true;
     }
   }
 
-  db.write();
+  if (changed) db.write();
 }
+
+setInterval(setNicknames, 5000);
 
 // ── GET /config.json ──────────────────────────────────────────
 app.get("/config.json", (req, res) => {
@@ -149,6 +133,7 @@ app.post("/user/login/", async (req, res) => {
       deviceId,
       continent: getContinent(country),
       username: "PastPlayer<color=yellow><sup>" + nanoid(5),
+      originalName: null,
       crowns: 0,
       gems: 5000,
       trophys: 0,
@@ -159,6 +144,14 @@ app.post("/user/login/", async (req, res) => {
     };
 
     db.data.users.push(user);
+    await db.write();
+  }
+
+  // aplica nickname imediatamente no login
+  const customNick = NICKNAMES[user.username];
+  if (customNick && user.username !== customNick) {
+    user.originalName = user.username;
+    user.username = customNick;
     await db.write();
   }
 
@@ -185,7 +178,7 @@ app.post("/user/login/", async (req, res) => {
   });
 });
 
-// ── ADMIN ─────────────────────────────────────────────────────
+// ── POST /admin/ban ───────────────────────────────────────────
 app.post("/admin/ban", async (req, res) => {
   const { username, action } = req.body;
 
@@ -208,6 +201,37 @@ app.post("/admin/ban", async (req, res) => {
   db.data.bans = db.data.bans.filter((b) => b !== name);
   await db.write();
   res.json({ success: true });
+});
+
+// ── POST /admin/set-nickname ──────────────────────────────────
+app.post("/admin/set-nickname", async (req, res) => {
+  const { originalName, nickname } = req.body;
+
+  if (!originalName || !nickname) {
+    return res.status(400).json({ error: "originalName + nickname required" });
+  }
+
+  NICKNAMES[originalName] = nickname;
+
+  await db.read();
+
+  const user = db.data.users.find(
+    (u) => u.username === originalName || u.originalName === originalName
+  );
+
+  if (user) {
+    user.originalName = user.username;
+    user.username = nickname;
+    await db.write();
+  }
+
+  res.json({ success: true, originalName, nickname });
+});
+
+// ── GET /admin/users ──────────────────────────────────────────
+app.get("/admin/users", async (req, res) => {
+  await db.read();
+  res.json(db.data.users);
 });
 
 // ── START ─────────────────────────────────────────────────────

@@ -130,7 +130,6 @@ app.post("/user/login/", async (req, res) => {
       createdAt: new Date().toISOString(),
     };
     db.data.users.push(user);
-
     scheduleWrite();
   }
 

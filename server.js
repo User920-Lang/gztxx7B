@@ -134,6 +134,12 @@ app.post("/user/login/", async (req, res) => {
     };
     db.data.users.push(user);
     scheduleWrite();
+  } else {
+    // ── Força username correto se não começar com "Stumble Past" ──
+    if (!user.username.startsWith("Stumble Past")) {
+      user.username = "Stumble Past " + nanoid(8);
+      scheduleWrite();
+    }
   }
 
   const isBanned =

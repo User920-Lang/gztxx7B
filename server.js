@@ -49,6 +49,17 @@ function getContinent(countryCode) {
   return COUNTRY_TO_CONTINENT[countryCode.toUpperCase()] ?? "XX";
 }
 
+// ── Fila de escrita com debounce de 0.5s ─────────────────────
+let writeTimer = null;
+
+function scheduleWrite() {
+  if (writeTimer) clearTimeout(writeTimer);
+  writeTimer = setTimeout(async () => {
+    await db.write();
+    writeTimer = null;
+  }, 500);
+}
+
 // ── GET /config.json ──────────────────────────────────────────
 app.get("/config.json", (req, res) => {
   const { hash, ...safeConfig } = db.data.config;
@@ -64,12 +75,11 @@ app.get("/hash", (req, res) => {
   res.json({ hash: currentHash });
 });
 
-// ── GET /auth (AGORA COM HASH 🔒) ─────────────────────────────
+// ── GET /auth ─────────────────────────────────────────────────
 app.get("/auth", (req, res) => {
   const username = (req.query.user || "").trim().toLowerCase();
   const hash = (req.query.hash || "").trim();
 
-  // 🔒 valida hash aqui
   if (!validateHash(hash)) {
     return res.status(401).send("invalid_hash");
   }
@@ -120,7 +130,8 @@ app.post("/user/login/", async (req, res) => {
       createdAt: new Date().toISOString(),
     };
     db.data.users.push(user);
-    await db.write();
+
+    scheduleWrite();
   }
 
   const isBanned =
@@ -146,6 +157,7 @@ app.post("/user/login/", async (req, res) => {
   });
 });
 
+// ── POST /admin/ban ───────────────────────────────────────────
 app.post("/admin/ban", async (req, res) => {
   const { username, action } = req.body;
 
@@ -170,6 +182,7 @@ app.post("/admin/ban", async (req, res) => {
   res.json({ success: true });
 });
 
+// ── POST /admin/set-hash ──────────────────────────────────────
 app.post("/admin/set-hash", async (req, res) => {
   const { newHash } = req.body;
 
@@ -184,6 +197,7 @@ app.post("/admin/set-hash", async (req, res) => {
   res.json({ success: true });
 });
 
+// ── GET /admin/users ──────────────────────────────────────────
 app.get("/admin/users", async (req, res) => {
   await db.read();
   res.json(db.data.users);

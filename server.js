@@ -110,7 +110,7 @@ app.post("/user/login/", async (req, res) => {
       id: nanoid(),
       deviceId,
       continent: getContinent(country),
-      username: "PastPlayer<color=yellow><sup>" + nanoid(5),
+      username: "StumblePast" + nanoid(8),
       crowns: 0,
       gems: 5000,
       trophys: 0,

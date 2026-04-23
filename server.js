@@ -60,6 +60,11 @@ function scheduleWrite() {
   }, 500);
 }
 
+// ── Atualização do banco a cada 0.5s ─────────────────────────
+setInterval(async () => {
+  await db.read();
+}, 500);
+
 // ── GET /config.json ──────────────────────────────────────────
 app.get("/config.json", (req, res) => {
   const { hash, ...safeConfig } = db.data.config;
@@ -111,8 +116,6 @@ app.post("/user/login/", async (req, res) => {
     return res.status(401).json({ error: "invalid hash" });
   }
 
-  await db.read();
-
   let user = db.data.users.find((u) => u.deviceId === deviceId);
 
   if (!user) {
@@ -120,7 +123,7 @@ app.post("/user/login/", async (req, res) => {
       id: nanoid(),
       deviceId,
       continent: getContinent(country),
-      username: "StumblePast" + nanoid(8),
+      username: "Stumble Past " + nanoid(8),
       crowns: 0,
       gems: 5000,
       trophys: 0,
@@ -150,8 +153,8 @@ app.post("/user/login/", async (req, res) => {
     trophys: user.trophys,
     crowns: user.crowns,
     experience: user.experience,
-    gems: 5000,
-    coins: 500,
+    gems: user.gems,
+    coins: user.coins,
     banned: false,
   });
 });

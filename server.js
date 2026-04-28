@@ -49,7 +49,7 @@ function getContinent(countryCode) {
   return COUNTRY_TO_CONTINENT[countryCode.toUpperCase()] ?? "XX";
 }
 
-// ── Fila de escrita com debounce de 0.5s ─────────────────────
+// ── Debounced write queue ─────────────────────────────────────
 let writeTimer = null;
 
 function scheduleWrite() {
@@ -60,7 +60,7 @@ function scheduleWrite() {
   }, 500);
 }
 
-// ── Atualização do banco a cada 0.5s ─────────────────────────
+// ── Refresh db every 0.5s ─────────────────────────────────────
 setInterval(async () => {
   await db.read();
 }, 500);
@@ -75,7 +75,7 @@ app.get("/config.json", (req, res) => {
 app.get("/hash", (req, res) => {
   const currentHash = getHash();
   if (!currentHash) {
-    return res.json({ hash: null, message: "Nenhum hash configurado." });
+    return res.json({ hash: null, message: "No hash configured." });
   }
   res.json({ hash: currentHash });
 });
@@ -104,7 +104,7 @@ app.get("/auth", (req, res) => {
   res.send("on");
 });
 
-// ── POST /user/login/ ─────────────────────────────────────────
+// ── POST /user/login ──────────────────────────────────────────
 app.post("/user/login/", async (req, res) => {
   const { deviceId, country, hash } = req.body;
 
@@ -134,12 +134,6 @@ app.post("/user/login/", async (req, res) => {
     };
     db.data.users.push(user);
     scheduleWrite();
-  } else {
-    // ── Força username correto se não começar com "Stumble Past" ──
-    if (!user.username.startsWith("Stumble Past")) {
-      user.username = "Stumble Past " + nanoid(8);
-      scheduleWrite();
-    }
   }
 
   const isBanned =
@@ -151,6 +145,116 @@ app.post("/user/login/", async (req, res) => {
   if (isBanned) {
     return res.json({ banned: true });
   }
+
+  res.json({
+    id: user.id,
+    username: user.username,
+    country: user.continent,
+    trophys: user.trophys,
+    crowns: user.crowns,
+    experience: user.experience,
+    gems: user.gems,
+    coins: user.coins,
+    banned: false,
+  });
+});
+
+// ── POST /user/update (free username change) ──────────────────
+app.post("/user/update", async (req, res) => {
+  const { deviceId, username, hash } = req.body;
+
+  if (!validateHash(hash)) {
+    return res.status(401).json({ error: "invalid hash" });
+  }
+
+  if (!deviceId || !username) {
+    return res.status(400).json({ error: "deviceId and username required" });
+  }
+
+  const trimmed = username.trim();
+
+  if (trimmed.length < 4 || trimmed.length > 12) {
+    return res.status(400).json({ error: "username must be between 4 and 12 characters" });
+  }
+
+  await db.read();
+
+  const nameExists = db.data.users.some(
+    (u) =>
+      u.deviceId !== deviceId &&
+      u.username.trim().toLowerCase() === trimmed.toLowerCase()
+  );
+
+  if (nameExists) {
+    return res.status(409).json({ error: "username already taken" });
+  }
+
+  const user = db.data.users.find((u) => u.deviceId === deviceId);
+
+  if (!user) {
+    return res.status(404).json({ error: "user not found" });
+  }
+
+  user.username = trimmed;
+  scheduleWrite();
+
+  res.json({
+    id: user.id,
+    username: user.username,
+    country: user.continent,
+    trophys: user.trophys,
+    crowns: user.crowns,
+    experience: user.experience,
+    gems: user.gems,
+    coins: user.coins,
+    banned: false,
+  });
+});
+
+// ── POST /user/updateusername (paid username change) ──────────
+app.post("/user/updateusername", async (req, res) => {
+  const { deviceId, username, hash } = req.body;
+
+  if (!validateHash(hash)) {
+    return res.status(401).json({ error: "invalid hash" });
+  }
+
+  if (!deviceId || !username) {
+    return res.status(400).json({ error: "deviceId and username required" });
+  }
+
+  const trimmed = username.trim();
+
+  if (trimmed.length < 4 || trimmed.length > 12) {
+    return res.status(400).json({ error: "username must be between 4 and 12 characters" });
+  }
+
+  await db.read();
+
+  const user = db.data.users.find((u) => u.deviceId === deviceId);
+
+  if (!user) {
+    return res.status(404).json({ error: "user not found" });
+  }
+
+  const GEM_COST = 100;
+  if (user.gems < GEM_COST) {
+    return res.status(402).json({ error: "not enough gems" });
+  }
+
+  const nameExists = db.data.users.some(
+    (u) =>
+      u.deviceId !== deviceId &&
+      u.username.trim().toLowerCase() === trimmed.toLowerCase()
+  );
+
+  if (nameExists) {
+    return res.status(409).json({ error: "username already taken" });
+  }
+
+  user.username = trimmed;
+  user.gems -= GEM_COST;
+  scheduleWrite();
 
   res.json({
     id: user.id,
@@ -213,6 +317,6 @@ app.get("/admin/users", async (req, res) => {
 
 app.listen(PORT, () => {
   const currentHash = getHash();
-  console.log(`🚀 Backend rodando em http://localhost:${PORT}`);
+  console.log(`🚀 Server running at http://localhost:${PORT}`);
   console.log(`🔑 Hash: ${currentHash ?? "OFF"}`);
 });

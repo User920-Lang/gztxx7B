@@ -14,7 +14,6 @@ app.use(bodyParser.json());
 const db = new Low(new JSONFile("db.json"), {});
 await db.read();
 
-// ── Hash validation helper ────────────────────────────────────
 function getHash() {
   return process.env.SERVER_HASH || db.data.config?.hash || null;
 }
@@ -25,7 +24,6 @@ function validateHash(hash) {
   return hash === serverHash;
 }
 
-// ── Continent map ─────────────────────────────────────────────
 const COUNTRY_TO_CONTINENT = {
   BR: "SA", AR: "SA", CL: "SA", CO: "SA", PE: "SA", VE: "SA",
   BO: "SA", PY: "SA", UY: "SA", EC: "SA", GY: "SA", SR: "SA",
@@ -49,7 +47,6 @@ function getContinent(countryCode) {
   return COUNTRY_TO_CONTINENT[countryCode.toUpperCase()] ?? "XX";
 }
 
-// ── Debounced write queue ─────────────────────────────────────
 let writeTimer = null;
 
 function scheduleWrite() {
@@ -60,18 +57,15 @@ function scheduleWrite() {
   }, 500);
 }
 
-// ── Refresh db every 0.5s ─────────────────────────────────────
 setInterval(async () => {
   await db.read();
 }, 500);
 
-// ── GET /config.json ──────────────────────────────────────────
 app.get("/config.json", (req, res) => {
   const { hash, ...safeConfig } = db.data.config;
   res.json(safeConfig);
 });
 
-// ── GET /hash ─────────────────────────────────────────────────
 app.get("/hash", (req, res) => {
   const currentHash = getHash();
   if (!currentHash) {
@@ -80,7 +74,6 @@ app.get("/hash", (req, res) => {
   res.json({ hash: currentHash });
 });
 
-// ── GET /auth ─────────────────────────────────────────────────
 app.get("/auth", (req, res) => {
   const username = (req.query.user || "").trim().toLowerCase();
   const hash = (req.query.hash || "").trim();
@@ -104,7 +97,6 @@ app.get("/auth", (req, res) => {
   res.send("on");
 });
 
-// ── POST /user/login ──────────────────────────────────────────
 app.post("/user/login/", async (req, res) => {
   const { deviceId, country, hash } = req.body;
 
@@ -159,9 +151,9 @@ app.post("/user/login/", async (req, res) => {
   });
 });
 
-// ── POST /user/update (free username change) ──────────────────
 app.post("/user/update", async (req, res) => {
-  const { deviceId, username, hash } = req.body;
+  const { deviceId, hash } = req.body;
+  const username = req.body.username || req.body.Username;
 
   if (!validateHash(hash)) {
     return res.status(401).json({ error: "invalid hash" });
@@ -211,9 +203,9 @@ app.post("/user/update", async (req, res) => {
   });
 });
 
-// ── POST /user/updateusername (paid username change) ──────────
 app.post("/user/updateusername", async (req, res) => {
-  const { deviceId, username, hash } = req.body;
+  const { deviceId, hash } = req.body;
+  const username = req.body.username || req.body.Username;
 
   if (!validateHash(hash)) {
     return res.status(401).json({ error: "invalid hash" });
@@ -269,7 +261,6 @@ app.post("/user/updateusername", async (req, res) => {
   });
 });
 
-// ── POST /admin/ban ───────────────────────────────────────────
 app.post("/admin/ban", async (req, res) => {
   const { username, action } = req.body;
 
@@ -294,7 +285,6 @@ app.post("/admin/ban", async (req, res) => {
   res.json({ success: true });
 });
 
-// ── POST /admin/set-hash ──────────────────────────────────────
 app.post("/admin/set-hash", async (req, res) => {
   const { newHash } = req.body;
 
@@ -309,7 +299,6 @@ app.post("/admin/set-hash", async (req, res) => {
   res.json({ success: true });
 });
 
-// ── GET /admin/users ──────────────────────────────────────────
 app.get("/admin/users", async (req, res) => {
   await db.read();
   res.json(db.data.users);
